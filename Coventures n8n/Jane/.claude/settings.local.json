@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "mcp__n8n__n8n_list_workflows"
+      "mcp__n8n__n8n_list_workflows",
+      "mcp__n8n__n8n_update_partial_workflow"
     ]
   }
 }
