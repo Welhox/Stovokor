@@ -3,3 +3,4 @@
 .obsidian/cache
 .trash/
 *.tmp
+.obsidian/plugins/
