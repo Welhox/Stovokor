@@ -81,8 +81,9 @@
 Trigger(email) → Parallel Fetch:
   ├── Agileday API (by email)
   ├── HubSpot API (filter users)
-  └── Google Workspace Admin API
-→ Merge (3 inputs) → Format Response
+  ├── Google Workspace Admin API
+  └── Slack API (users.list, filter by email)
+→ Merge (4 inputs) → Format Response
 ```
 
 **Output Format:**
@@ -93,7 +94,8 @@ Trigger(email) → Parallel Fetch:
   "name": "John Doe",
   "agileday": { "active": true, "team": "EiR Business", "title": "EiR" },
   "hubspot": { "active": true, "role": "user" },
-  "google": { "active": true, "suspended": false }
+  "google": { "active": true, "suspended": false },
+  "slack": { "active": true, "display_name": "John", "title": "EiR" }
 }
 ```
 
@@ -102,8 +104,9 @@ Trigger(email) → Parallel Fetch:
 Trigger(platform?, status?) → Parallel Fetch:
   ├── Agileday API (all employees)
   ├── HubSpot API (all users)
-  └── Google Workspace Admin API (all users)
-→ Merge (3 inputs) → Consolidate by Email → Filter → Return
+  ├── Google Workspace Admin API (all users)
+  └── Slack API (all workspace members)
+→ Merge (4 inputs) → Consolidate by Email → Filter → Return
 ```
 
 **Output Format:**
@@ -118,11 +121,14 @@ Trigger(platform?, status?) → Parallel Fetch:
       "agileday": true,
       "hubspot": true,
       "google": true,
+      "slack": true,
       "agileday_team": "EiR Business"
     }
   ]
 }
 ```
+
+**Slack notes:** Bots and deleted workspace members are excluded. Requires `users:read` scope (and `users:read.email` for email matching — add this to the Slack app if not already present).
 
 ---
 
@@ -160,6 +166,8 @@ Trigger(platform?, status?) → Parallel Fetch:
 ### Slack
 - Manual invitation required (API costs avoided during development)
 - Notification sent to admins instead of automatic user creation
+- **User querying** now supported via `users.list` API (Pro plan compatible)
+- Required scopes: `users:read` + `users:read.email` (add the latter to enable email-based matching)
 
 ### Agileday
 - Required fields: first_name, last_name, email, start_date, primary_team, business_unit
@@ -199,7 +207,7 @@ Trigger(platform?, status?) → Parallel Fetch:
 
 1. **Federated queries > Database sync** - Fresh data, simpler architecture
 2. **Parameterized queries** - Use `$1, $2` with `queryReplacement` arrays (SQL injection prevention)
-3. **Parallel platform execution** - Merge node with 3 inputs for simultaneous fetches
+3. **Parallel platform execution** - Merge node with 4 inputs for simultaneous fetches (Agileday, HubSpot, Google, Slack)
 4. **Error handling**: `onError: "continueRegularOutput"` on fetch nodes
 5. **Soft delete** - Offboard (status change) rather than delete users
 
@@ -257,7 +265,7 @@ Audit log → Report results
 
 4. **Connection failures**: Use `cleanStaleConnections` operation in partial updates
 
-5. **Merge node issues**: Use `mode: "chooseBranch"` with `numberInputs: 3` for 3-input merges
+5. **Merge node issues**: Use `mode: "chooseBranch"` with `numberInputs: 4` for 4-input merges (Tool - Check Access and Tool - List Users)
 
 6. **Google Workspace validation warnings**: `userId` mode "userEmail" shows as invalid in validator but works at runtime
 
@@ -288,6 +296,8 @@ Google Admin:      n8n-nodes-base.gSuiteAdmin
 | HubSpot - Get users | `GET /settings/v3/users` | OAuth Bearer |
 | Google - Get user | `GET /admin/directory/v1/users/{email}` | Service Account |
 | Google - Get all | `GET /admin/directory/v1/users?domain=coventures.io` | Service Account |
+| Slack - Get all users | `GET /api/users.list` | OAuth (via n8n Slack node) |
+| Slack - Lookup by email | `GET /api/users.lookupByEmail?email={email}` | OAuth (requires `users:read.email`) |
 
 ---
 
@@ -299,6 +309,9 @@ Google Admin:      n8n-nodes-base.gSuiteAdmin
 - Created Tool - List Users (federated query)
 - Migrated from database sync to federated query architecture
 - Fixed Merge node to use 3 inputs with proper `targetIndex` connections
+- Added Slack user querying to Tool - Check Access and Tool - List Users (4-platform federated query)
+  - Slack Pro plan compatible via `users.list` API
+  - Requires `users:read.email` scope on the Slack app for email-based matching
 
 ### Previous
 - See transcript archives for historical changes

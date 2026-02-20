@@ -3,7 +3,9 @@
     "allow": [
       "mcp__n8n__n8n_list_workflows",
       "mcp__n8n__n8n_update_partial_workflow",
-      "mcp__n8n__n8n_get_workflow"
+      "mcp__n8n__n8n_get_workflow",
+      "WebSearch",
+      "mcp__n8n__get_node"
     ]
   }
 }

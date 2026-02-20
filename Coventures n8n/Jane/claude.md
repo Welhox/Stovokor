@@ -47,6 +47,8 @@ You are an expert in n8n automation software using n8n-MCP tools. Your role is t
 | HubSpot - Get users | `/settings/v3/users` | GET |
 | Google - Get user | `/admin/directory/v1/users/{email}` | GET |
 | Google - Get all | `/admin/directory/v1/users?domain=coventures.io` | GET |
+| Slack - Get all users | `/api/users.list` | GET (via n8n Slack node) |
+| Slack - Lookup by email | `/api/users.lookupByEmail?email={email}` | GET (requires `users:read.email`) |
 
 ---
 
