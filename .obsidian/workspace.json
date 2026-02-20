@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Welcome.md",
+                "file": "Coventures n8n/Jane/Handover-Updated.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Welcome"
+              "title": "Handover-Updated"
             }
           }
         ]
@@ -74,7 +74,8 @@
               "title": "Bookmarks"
             }
           }
-        ]
+        ],
+        "currentTab": 1
       }
     ],
     "direction": "horizontal",
@@ -184,17 +185,17 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "b01f39ef43e82109",
+  "active": "f274ac23e35ecdc6",
   "lastOpenFiles": [
-    "Coventures n8n/claude-n8n-generic.md",
     "Coventures n8n/Jane/claude.md",
+    "Coventures n8n/claude-n8n-generic.md",
+    "CLAUDE.md",
+    "Welcome.md",
     "Coventures n8n/Jane/Handover-Updated.md",
     "Coventures n8n/Jane/CLAUDE.md",
     "Coventures n8n/Jane",
     "N8n/Jane",
     "N8n",
-    "CLAUDE.md",
-    "Welcome.md",
     "Untitled"
   ]
 }
