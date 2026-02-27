@@ -49,8 +49,8 @@
 |----------|-----|---------|--------|
 | **Tool - Check Access** | `Ukl1o4WdH8GAxcG1` | Query single user across all platforms by email | ✅ New |
 | **Tool - List Users** | `2uDCT1p955INp2tE` | List all users with platform access (federated query) | ✅ New |
-| Tool - Update Agileday User | `nTr2xjch7XpsHcl2` | Update Agileday fields (team, title, etc.) | ✅ Active |
-| Tool - Send Agileday Onboarding | `u8vIm8gI9STFFRrB` | Send onboarding email via Agileday | ✅ Active |
+| Tool - Update Agileday User | `nTr2xjch7XpsHcl2` | Update Agileday fields (team, title, etc.) — params: `email`, `firstName`, `lastName`, `title`, `primaryTeam`, `nationality`, `startDate` | ✅ Active |
+| Tool - Send Agileday Onboarding | `u8vIm8gI9STFFRrB` | Send onboarding email via Agileday — params: `email`, `personal_email`, `first_name`, `last_name` | ✅ Active |
 
 ### Legacy/Deprecated Workflows
 
@@ -81,10 +81,12 @@
 Trigger(email) → Parallel Fetch:
   ├── Agileday API (by email)
   ├── HubSpot API (filter users)
-  ├── Google Workspace Admin API
+  ├── Google Workspace Admin API (projection: full)
   └── Slack API (users.list, filter by email)
 → Merge (4 inputs) → Format Response
 ```
+
+**Input parameter:** `email` (required) — the user's email address.
 
 **Output Format:**
 ```json
@@ -94,20 +96,37 @@ Trigger(email) → Parallel Fetch:
   "name": "John Doe",
   "agileday": { "active": true, "team": "EiR Business", "title": "EiR" },
   "hubspot": { "active": true, "role": "user" },
-  "google": { "active": true, "suspended": false },
+  "google": {
+    "active": true,
+    "suspended": false,
+    "isAdmin": false,
+    "isDelegatedAdmin": false,
+    "is2faEnabled": false,
+    "changePasswordAtNextLogin": false,
+    "orgUnit": "/",
+    "lastLoginTime": "2026-01-15T10:00:00Z",
+    "creationTime": "2024-03-01T09:00:00Z"
+  },
   "slack": { "active": true, "display_name": "John", "title": "EiR" }
 }
 ```
 
+**Note:** Google field `is2faEnabled` corresponds to Google's `isEnrolledIn2Sv`. Requires `projection: full` on the gSuiteAdmin node — `projection: basic` (default) omits this field.
+
 ### Tool - List Users Flow
 ```
-Trigger(platform?, status?) → Parallel Fetch:
+Trigger(platform?, status?, include_offboarded?) → Parallel Fetch:
   ├── Agileday API (all employees)
   ├── HubSpot API (all users)
   ├── Google Workspace Admin API (all users)
   └── Slack API (all workspace members)
 → Merge (4 inputs) → Consolidate by Email → Filter → Return
 ```
+
+**Input parameters:**
+- `platform` (optional): filter by platform — `agileday`, `hubspot`, `google`, `slack`
+- `status` (optional): filter by status — `active`, `inactive`
+- `include_offboarded` (optional, boolean, default `false`): when `true`, includes users who are disabled in Agileday and have no other active access (i.e. fully offboarded employees)
 
 **Output Format:**
 ```json
@@ -122,11 +141,25 @@ Trigger(platform?, status?) → Parallel Fetch:
       "hubspot": true,
       "google": true,
       "slack": true,
-      "agileday_team": "EiR Business"
+      "agileday_team": "EiR Business",
+      "agileday_title": "EiR",
+      "agileday_segment": "employee",
+      "agileday_start_date": "2024-03-01",
+      "agileday_end_date": null,
+      "agileday_is_offboarding": false,
+      "google_2fa_enabled": false,
+      "google_is_delegated_admin": false,
+      "slack_is_admin": false,
+      "slack_is_restricted": false
     }
   ]
 }
 ```
+
+**Agileday status fields:**
+- `agileday: true` = active/enabled in Agileday; `false` = disabled (offboarded) or not in Agileday
+- `agileday_is_offboarding: true` = active employee with a future `agileday_end_date` (leaving soon)
+- Users with `agileday: false` and no other system access are excluded by default (`include_offboarded: false`)
 
 **Slack notes:** Bots and deleted workspace members are excluded. Requires `users:read` scope (and `users:read.email` for email matching — add this to the Slack app if not already present).
 
@@ -174,12 +207,16 @@ Trigger(platform?, status?) → Parallel Fetch:
 - Offboarding: set end_date + disable (profile preserved for historical data)
 - Segments: "employee" or "subcontractor"
 - API base: `https://coventures.agileday.io/api/v1/`
+- API returns ALL employees including disabled (`disabled: true/false`). `agileday` field = `!emp.disabled`
+- `agileday_is_offboarding` = active (`!disabled`) AND has a future `end_date`
 
 ### Google Workspace
 - Full automation via Admin API
 - Domain: `coventures.io`
 - Delete = Suspend (preserves files, 20-day recovery window)
 - Invitation flow (ID assigned when user accepts)
+- **`projection: full` required** on gSuiteAdmin node to get `isEnrolledIn2Sv` (2FA status). Default `projection: basic` omits it. Also set `output: raw` to prevent n8n from stripping custom fields.
+- Field `is2faEnabled` in tool output = Google's `isEnrolledIn2Sv`
 
 ---
 
@@ -246,10 +283,10 @@ Audit log → Report results
 3. Google Workspace returns invitation (no ID until accepted)
 
 ### Pending Tasks
-- [ ] Connect new Tool - Check Access to Jane agent
-- [ ] Connect new Tool - List Users to Jane agent
-- [ ] Remove deprecated DB query tools from agent
-- [ ] Test federated query workflows
+- [x] Connect new Tool - Check Access to Jane agent
+- [x] Connect new Tool - List Users to Jane agent
+- [x] Remove deprecated DB query tools from agent
+- [x] Test federated query workflows
 - [ ] Implement audit logging to `jane_bot.audit_log` table
 - [ ] Update add_user/remove_user to use check_access instead of DB lookups
 
@@ -261,7 +298,7 @@ Audit log → Report results
 
 2. **Workflow invisible in GUI**: Usually Switch node version mismatch (downgrade from v3.4 to v2)
 
-3. **Agent schema errors**: LangChain `$fromAI` parameters may send null; simplify tool inputs
+3. **Agent schema errors**: LangChain `$fromAI` parameters may send null; simplify tool inputs. Also: the LLM infers parameter names from the tool schema — **parameter names in `workflowInputs.schema`, in the system prompt docs, and in the trigger `workflowInputs.values` must all match exactly**. gpt-4.1 is strict about this; mismatches that gpt-4.1-mini tolerated will cause `Received tool input did not match expected schema` errors.
 
 4. **Connection failures**: Use `cleanStaleConnections` operation in partial updates
 
@@ -303,12 +340,29 @@ Google Admin:      n8n-nodes-base.gSuiteAdmin
 
 ## Changelog
 
-### February 2026
+### February 2026 (late)
+- **Model upgrade**: Agent - Jane v2 (`TEST model` node) upgraded from `gpt-4.1-mini` → `gpt-4.1` for stronger temporal reasoning and agentic tasks
+- **Live date injection**: Jane's system prompt converted to n8n expression using `$now.toFormat('yyyy-MM-dd')` — Jane now knows the exact current date at runtime
+- **Date interpretation rules**: Added `## DATE INTERPRETATION` section to system prompt (previous month = calendar month, last 30 days = rolling window)
+- **Agileday offboarding**:
+  - Added `agileday_is_offboarding` computed field (true = active employee with future end date)
+  - Added `include_offboarded` parameter to Tool - List Users (default false — excludes fully disabled/offboarded users from normal queries)
+  - Updated Jane's system prompt with Agileday status interpretation guide
+- **Google 2FA field**:
+  - Renamed `google_is_enrolled_2sv` → `google_2fa_enabled` in Tool - List Users output
+  - Renamed `isEnrolledIn2Sv` → `is2faEnabled` in Tool - Check Access output
+  - Set `projection: full` + `output: raw` on gSuiteAdmin nodes — `projection: basic` (default) omits 2FA field
+- **Tool parameter schema fixes** (gpt-4.1 stricter than mini):
+  - Tool - List Users: corrected system prompt to use `platform`/`status` (not `filter_system`/`filter_status`); added `include_offboarded` to `workflowInputs.schema`
+  - Tool - Check Access: added explicit `check_access(email)` documentation to system prompt; prevents model from inferring `filter_email`
+  - Tool - Send Agileday Onboarding: trimmed 9 phantom parameters from `workflowInputs.schema` (Slack context fields leaked in from trigger passthrough — unused by workflow, caused LLM confusion)
+
+### February 2026 (early)
 - Upgraded n8n from 1.121.3 to 2.x
 - Created Tool - Check Access (federated query)
 - Created Tool - List Users (federated query)
 - Migrated from database sync to federated query architecture
-- Fixed Merge node to use 3 inputs with proper `targetIndex` connections
+- Fixed Merge node to use 4 inputs with proper `targetIndex` connections
 - Added Slack user querying to Tool - Check Access and Tool - List Users (4-platform federated query)
   - Slack Pro plan compatible via `users.list` API
   - Requires `users:read.email` scope on the Slack app for email-based matching
